@@ -68,7 +68,9 @@ screen 411x890  route /cart (MaterialPageRoute<void>)
 - `(off screen)` rows exist but need scrolling. `scrolled 0 of 2084` on a
   scrollable means there is more below.
 - Every action prints the snapshot that follows it, so one command is both the
-  act and the look. Add `--quiet` when you do not need it.
+  act and the look. For steps in a row whose result you already know, such as
+  filling a form, add `--quiet` to all but the last: a snapshot of a list
+  screen is several hundred tokens, the quiet `ok` line about fifteen.
 - An action's first line names what it landed on:
   `ok: FilledButton key=pay lib/cart/cart_page.dart:80 at 205,640`. If that is
   not the widget you meant, the step did something else.

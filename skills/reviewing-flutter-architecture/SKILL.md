@@ -24,7 +24,7 @@ Run these from the project root and keep the output:
 ```
 flutter analyze
 dart <this skill's base directory>/scripts/arch_check.dart
-flutter test --coverage      # then run arch_check again for coverage by module
+flutter test --coverage --reporter failures-only   # then run arch_check again for coverage by module
 ```
 
 `arch_check` reports:

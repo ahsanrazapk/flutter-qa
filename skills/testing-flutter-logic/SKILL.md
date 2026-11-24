@@ -132,8 +132,8 @@ app has to handle.
 ## Run and measure
 
 ```
-flutter test test/cart_test.dart          # one file while writing
-flutter test --coverage                   # everything, writes coverage/lcov.info
+flutter test test/cart_test.dart                    # one file while writing
+flutter test --coverage --reporter failures-only    # everything: prints only failures and the count, writes coverage/lcov.info
 ```
 
 Coverage by module, including files no test ever loads, comes from the

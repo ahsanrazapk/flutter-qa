@@ -38,7 +38,7 @@ Write the scope down as the first lines of the report.
 | # | Layer | What to do | Skill |
 |---|---|---|---|
 | 1 | Static | `flutter analyze`; `dart format --output=none --set-exit-if-changed .` (rewrites nothing: exit code 1 and its `Changed` lines name the unformatted files); the architecture checker | **reviewing-flutter-architecture** |
-| 2 | Logic | Every rule in scope has unit tests for its cases, including failure paths; `flutter test --coverage`, then the architecture checker again for coverage by module | **testing-flutter-logic** |
+| 2 | Logic | Every rule in scope has unit tests for its cases, including failure paths; `flutter test --coverage --reporter failures-only`, then the architecture checker again for coverage by module | **testing-flutter-logic** |
 | 3 | UI | Every screen in scope has widget tests for its states, one accessibility test, one small-screen large-text test | **testing-flutter-ui** |
 | 4 | Journeys | Critical paths as integration tests, run on a device | **testing-flutter-flows** |
 | 5 | Exploration | Drive the running app through everything in scope, trying to break it | **driving-flutter-apps** |
@@ -54,6 +54,18 @@ results as `not run`, with the reason, and again under "Not covered".
 
 Read exit codes from the command itself: piping it through `tail` or `head`
 replaces its exit code with theirs.
+
+**Print only what you will read.** Output stays in the conversation for the
+rest of the pass, and a pass runs dozens of commands.
+
+- `flutter test --reporter failures-only` prints the failures and the final
+  count, not a line per passing test.
+- A report that may be long goes to a file. Print the exit code and the end,
+  and read more of the file only when you need it:
+  `mkdir -p qa-report; flutter analyze > qa-report/analyze.txt 2>&1; echo "exit $?"; tail -n 20 qa-report/analyze.txt`
+- With pilot, steps in a row whose result you already know take `--quiet` on
+  all but the last, or go in a saved flow: one line per step instead of a
+  screenful.
 
 Missing tests are a result, not a blocker: for a QA request, write the tests
 that are missing for what is in scope (layers 2 to 4), and list them in the
