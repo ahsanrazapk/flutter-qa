@@ -179,10 +179,40 @@ const _silentActions = {
 };
 
 class _Target {
-  _Target(this.point, this.what, [this.element]);
+  _Target(this.point, this.what, [this.element, this.rect]);
   final Offset point;
   final String what;
   final Element? element;
+
+  /// The widget's rectangle on screen; null for a bare point.
+  final Rect? rect;
+}
+
+/// A copy of [image] with a red frame round [rect], or a ring round [point]
+/// when there is no rectangle. This is how a screenshot shows where a defect
+/// is.
+Future<ui.Image> markImage(ui.Image image, {Rect? rect, Offset? point}) async {
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder)..drawImage(image, Offset.zero, Paint());
+  // A white edge under the red keeps the mark visible on any background.
+  for (final (color, width) in [
+    (const Color(0xFFFFFFFF), 7.0),
+    (const Color(0xFFE53935), 3.5),
+  ]) {
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = width
+      ..color = color;
+    if (rect != null) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect.inflate(5), const Radius.circular(6)),
+        paint,
+      );
+    } else if (point != null) {
+      canvas.drawCircle(point, 20, paint);
+    }
+  }
+  return recorder.endRecording().toImage(image.width, image.height);
 }
 
 final _sinceLastFrame = Stopwatch()..start();
@@ -387,6 +417,15 @@ class _Pilot {
     service: WidgetInspectorService.instance,
   );
 
+  /// Where [element]'s widget was created, as `lib/cart.dart:57`.
+  String? _createdAt(Element element) {
+    final location = _inspector.additionalNodeProperties(
+      element.toDiagnosticsNode(),
+    )['creationLocation'];
+    if (location is! Map) return null;
+    return '${_short('${location['file']}', _root)}:${location['line']}';
+  }
+
   /// The widget the app's own code created that [element] belongs to: its
   /// type, key and source line.
   ///
@@ -488,6 +527,12 @@ class _Pilot {
     if (params['key'] case final key?) return find.byKey(ValueKey<String>(key));
     if (params['tooltip'] case final message?) return find.byTooltip(message);
     if (params['label'] case final label?) return find.bySemanticsLabel(label);
+    if (params['src'] case final src?) {
+      return find.byElementPredicate(
+        (element) => _createdAt(element) == src,
+        description: 'widget created at $src',
+      );
+    }
     if (params['type'] case final type?) {
       return find.byWidgetPredicate(
         (widget) => '${widget.runtimeType}' == type,
@@ -571,7 +616,12 @@ class _Pilot {
       if (!rect.overlaps(_screen)) {
         throw _Failure('Ref $ref is off screen. Scroll to it first.');
       }
-      return _Target(rect.intersect(_screen).center, 'Ref $ref', _owners()[id]);
+      return _Target(
+        rect.intersect(_screen).center,
+        'Ref $ref',
+        _owners()[id],
+        rect,
+      );
     }
 
     final finder = _finder();
@@ -581,7 +631,11 @@ class _Pilot {
     if (matches.isEmpty) {
       throw _Failure('Nothing on screen matches: $what.', retry: true);
     }
-    final index = int.tryParse(params['index'] ?? '');
+    // Several widgets can be created on one source line; the outermost is
+    // the one an error message means.
+    final index =
+        int.tryParse(params['index'] ?? '') ??
+        (params.containsKey('src') ? 0 : null);
     if (index == null && matches.length > 1) {
       final list = [
         for (final (i, match) in matches.take(10).indexed)
@@ -606,7 +660,7 @@ class _Pilot {
     if (rect == null || !rect.overlaps(_screen)) {
       throw _Failure('It is off screen: $what. Scroll to it first.');
     }
-    return _Target(rect.intersect(_screen).center, 'The $what', element);
+    return _Target(rect.intersect(_screen).center, 'The $what', element, rect);
   }
 
   /// Fails when a tap at the target's point would land on something else.
@@ -819,14 +873,28 @@ class _Pilot {
   /// The Flutter-rendered screen as a PNG, one image pixel per logical pixel
   /// so that image coordinates are the ones --at takes.
   Future<Map<String, Object?>> _shot() async {
+    // Resolving the target first scrolls it into view if need be.
+    final target = await _target();
     await controller.pump();
     final layer = _view.debugLayer! as OffsetLayer;
-    final image = await layer.toImage(
+    var image = await layer.toImage(
       _view.paintBounds,
       pixelRatio: 1 / _view.flutterView.devicePixelRatio,
     );
+    if (target != null) {
+      final plain = image;
+      image = await markImage(
+        plain,
+        rect: target.rect?.intersect(_screen),
+        point: target.point,
+      );
+      plain.dispose();
+    }
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     image.dispose();
-    return {'png': base64Encode(bytes!.buffer.asUint8List())};
+    return {
+      'png': base64Encode(bytes!.buffer.asUint8List()),
+      if (target != null) 'hit': _landedOn(target),
+    };
   }
 }

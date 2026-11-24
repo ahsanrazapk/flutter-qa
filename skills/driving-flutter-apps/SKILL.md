@@ -28,6 +28,7 @@ not run in zsh. Run it from the Flutter project root, or pass `--project DIR`.
 | Still building | `pilot ready` (repeat until it prints `ready`) |
 | Read the screen | `pilot snapshot` |
 | See the pixels | `pilot shot` then Read `.dart_tool/flutter_pilot/shot.png` |
+| Screenshot with one element framed in red | `pilot shot bug.png --key pay`, `pilot shot bug.png 12`, `pilot shot bug.png --src lib/cart.dart:57` |
 | Tap | `pilot tap 12`, `pilot tap --key sign_in`, `pilot tap --text "Save"` |
 | Long press, double tap | `pilot tap 12 --long`, `pilot tap 12 --double` |
 | Check a button survives a fast double tap | `pilot tap --key pay --double`, then verify it happened **once** |
@@ -88,6 +89,8 @@ dark mode. None of these appear in a snapshot or throw an error.
 4. **`--type`**, for the only widget of its kind.
 5. **`--at X,Y`**, for canvas-drawn UI (charts, games, custom painters). Take
    `pilot shot` first: image pixels are the same logical coordinates.
+6. **`--src FILE:LINE`**, the widget created at that source line. An app error
+   names the line; this turns it back into the widget on screen.
 
 When several widgets match, pilot lists them top to bottom with their source
 lines and stops. Pick with `--index N`; do not guess.
@@ -112,7 +115,8 @@ also show up here: those are real bugs for screen reader users.
 
 A flow is a file of pilot commands, one per line, replayed in seconds against
 the running session. It fails at the first step that fails **or** that makes
-the app throw, and prints the screen and a screenshot path.
+the app throw, and prints the screen and the path of a screenshot in which
+the widget that step was aimed at is framed in red.
 
 ```
 # pilot/checkout.flow

@@ -1,0 +1,73 @@
+{
+  "title": "Checkout feature, branch feature/checkout",
+  "verdict": "Not ready: an order can be placed twice",
+  "summary": "One blocking defect in checkout and one layout problem. Everything else that was checked passed.",
+  "scope": {
+    "Checked": "Cart, checkout dialog and order confirmation",
+    "Build": "feature/checkout at 3f2a9c1, debug",
+    "Devices": "emulator-5554 (Android 16)",
+    "Backend": "Staging, test account qa@example.com",
+    "Out of scope": "Sign-up and settings"
+  },
+  "results": [
+    {
+      "layer": "Static analysis",
+      "command": "flutter analyze",
+      "result": "No issues found",
+      "status": "pass"
+    },
+    {
+      "layer": "Unit and widget tests",
+      "command": "flutter test --coverage",
+      "result": "212 passed, 1 failed; 81% of lines",
+      "status": "fail"
+    },
+    {
+      "layer": "Integration tests",
+      "command": "flutter test integration_test -d emulator-5554",
+      "result": "No iOS simulator was booted, so iOS was not run",
+      "status": "not run"
+    }
+  ],
+  "testsAdded": ["test/cart_total_test.dart", "pilot/double_order.flow"],
+  "defects": [
+    {
+      "severity": "High",
+      "title": "A double tap on Place order places two orders",
+      "where": "lib/checkout/checkout_page.dart:88",
+      "device": "emulator-5554",
+      "steps": [
+        "Sign in and add any product",
+        "Open checkout",
+        "pilot tap --key place_order --double"
+      ],
+      "expected": "One order.",
+      "actual": "Two orders, and the confirmation is shown twice.",
+      "evidence": "pilot/double_order.flow fails at its last step. The handler has no guard while the request is running.",
+      "screenshot": "01-double-order.png"
+    },
+    {
+      "severity": "Low",
+      "title": "The total overflows at the largest text size",
+      "where": "lib/checkout/total_row.dart:31",
+      "device": "emulator-5554",
+      "steps": ["Set the system text size to the largest", "Open checkout"],
+      "expected": "The total wraps or shrinks to fit.",
+      "actual": "A RenderFlex overflowed by 18 pixels on the right.",
+      "evidence": "pilot printed the overflow as an app error, naming this line.",
+      "screenshot": "02-total-overflow.png"
+    }
+  ],
+  "notCovered": [
+    "iOS: no simulator was booted",
+    "Real payments: the staging backend does not charge",
+    "Release build, performance and app size",
+    "A real screen reader"
+  ],
+  "repeat": [
+    "flutter analyze",
+    "flutter test --coverage",
+    "pilot.dart start -d emulator-5554",
+    "pilot.dart run pilot/double_order.flow"
+  ]
+}

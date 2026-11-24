@@ -630,16 +630,33 @@ Future<String> command(Session session, Args args, Duration timeout) async {
       await session.send('ping');
       return session.appErrors.isEmpty ? 'No app errors.' : '';
     case 'shot':
-      final reply = await session.send('shot');
+      // After the command: a file to write, a ref to frame, both or neither.
+      final words = args.positional.skip(1);
+      final refs = words.where((word) => int.tryParse(word) != null);
       final path =
-          args.positional.elementAtOrNull(1) ??
+          words.where((word) => int.tryParse(word) == null).firstOrNull ??
           '.dart_tool/flutter_pilot/shot.png';
+      final reply = await session.send(
+        'shot',
+        targetOf(
+          Args()
+            ..positional.addAll(['shot', ...refs])
+            ..options.addAll(args.options),
+        ),
+        until,
+      );
       try {
-        File(path).writeAsBytesSync(base64Decode(reply['png'] as String));
+        File(path)
+          ..parent.createSync(recursive: true)
+          ..writeAsBytesSync(base64Decode(reply['png'] as String));
       } on FileSystemException catch (problem) {
         throw Fail('Could not write $path: ${problem.osError?.message}.');
       }
-      return 'saved $path';
+      final hit = reply['hit'];
+      final framed = hit is Map<String, dynamic>
+          ? [', framed', ?hit['widget'], ?hit['src']].join(' ')
+          : '';
+      return 'saved $path$framed';
     case 'wait':
       final target = targetOf(args);
       if (target.isEmpty) throw Fail('wait needs a target.');
@@ -745,9 +762,18 @@ Future<bool> runFlow(Session session, String path, Duration timeout) async {
       stdout.writeln(renderSnapshot(await session.send('snapshot')));
       final shot =
           '${pilotDir(session.project)}/${file.uri.pathSegments.last}.failure.png';
-      File(shot).writeAsBytesSync(
-        base64Decode((await session.send('shot'))['png'] as String),
-      );
+      Map<String, dynamic> picture;
+      try {
+        // Frame what the step was aimed at, when it can still be found.
+        final typing = step.args.positional.first == 'type';
+        picture = await session.send(
+          'shot',
+          targetOf(step.args, skip: typing ? 2 : 1),
+        );
+      } on Fail {
+        picture = await session.send('shot');
+      }
+      File(shot).writeAsBytesSync(base64Decode(picture['png'] as String));
       stdout.writeln('screenshot: $shot');
     } on Fail {
       // The app is gone; the step's own message already says why.

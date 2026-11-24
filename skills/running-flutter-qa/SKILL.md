@@ -42,7 +42,7 @@ Write the scope down as the first lines of the report.
 | 3 | UI | Every screen in scope has widget tests for its states, one accessibility test, one small-screen large-text test | **testing-flutter-ui** |
 | 4 | Journeys | Critical paths as integration tests, run on a device | **testing-flutter-flows** |
 | 5 | Exploration | Drive the running app through everything in scope, trying to break it | **driving-flutter-apps** |
-| 6 | Report | Fill in [qa-report-template.md](qa-report-template.md) | |
+| 6 | Report | An HTML and PDF report with a framed screenshot for each defect (section 6) | |
 
 Do them in this order: a compile error makes every later layer meaningless,
 and a logic bug found in 2 saves an hour of chasing it in 5.
@@ -87,17 +87,30 @@ report's steps, and later the proof that it is fixed.
 
 ## 4. Writing a defect
 
+One defect is one thing a user or developer would fix. Each has:
+
+| Field | Holds |
+|---|---|
+| `severity` | **High** blocks a journey, loses data or money, or crashes. **Medium** gives a wrong result with a workaround. **Low** is cosmetic. |
+| `title` | what goes wrong, in the user's terms: "A double tap on Place order places two orders" |
+| `where` | file and line, from the snapshot or the app error |
+| `steps` | how to reproduce it; a saved pilot flow where possible |
+| `expected`, `actual` | one sentence each |
+| `evidence` | what you saw: the app error line, the failing test's name, the snapshot |
+| `screenshot` | a screenshot with the faulty element framed (below) |
+
+**Frame the fault in the screenshot.** A person reading the report should see
+where to look without reading the text:
+
 ```
-[High] Placing an order twice charges twice
-Steps:    pilot/double_order.flow  (sign in, add Product 3, checkout, tap "Place order" twice)
-Expected: one order
-Actual:   two "Order placed" messages; cart total charged twice
-Evidence: snapshot after step 9 shows 2 orders; lib/checkout/checkout_page.dart:88 has no guard
-Device:   emulator-5554, Android 16
+pilot shot qa-report/01-double-order.png --key place_order     # a widget
+pilot shot qa-report/02-overflow.png --src lib/cart.dart:57    # the widget an app error names
+pilot shot qa-report/03-chart.png --at 210,340                 # a point on a canvas
+pilot shot qa-report/04-blank.png                              # the whole screen, nothing to frame
 ```
 
-Severity: **High** blocks a journey, loses data or money, or crashes.
-**Medium** gives a wrong result with a workaround. **Low** is cosmetic.
+Take it while the defect is on screen, before the next step changes it. A
+defect found by a unit test has no screenshot: leave the field out.
 
 ## 5. Say what is left
 
@@ -118,6 +131,22 @@ whichever of these apply, so that a person knows where to look:
 
 Never write "fully tested" or "no issues". Write what ran, what it showed, and
 what did not run.
+
+## 6. The report
+
+1. Write `qa-report/report.json` in the project, with the fields shown in
+   [qa-report-example.json](qa-report-example.json). Screenshots go in the
+   same folder.
+2. Run `dart <this skill's base directory>/scripts/qa_report.dart qa-report/report.json`.
+   It checks the report is complete, then writes `qa-report/report.html` (one
+   file, screenshots embedded, opens anywhere) and `qa-report/report.pdf`.
+3. Tell the user the verdict, each defect in one line with its severity, what
+   is not covered, and the paths of both files.
+
+The generator refuses a report whose `notCovered` is empty, a result without
+a `status` of `pass`, `fail` or `not run`, or a defect without steps. If it
+says there is no PDF, a Chromium-family browser was not found: say so, and
+that the HTML prints to PDF from any browser.
 
 ## Common mistakes
 

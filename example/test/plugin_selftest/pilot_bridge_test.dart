@@ -1,5 +1,6 @@
 // Self-tests for the plugin's in-app bridge, run against the example app.
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -334,6 +335,54 @@ void main() {
     // Recorded once, each handler ran once, and nothing looped.
     expect(debugDrainPilotErrors(), [contains('boom')]);
     expect(presented, ['app', 'first']);
+  });
+
+  pilotTest('finds the widget an error names by its source line', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const DemoApp(auth: FakeAuthRepository()));
+    final button = nodeLabelled(
+      await ok(tester, 'snapshot'),
+      'Sign in',
+      flag: 'isButton',
+    );
+
+    final found = await ok(tester, 'find', {'src': '${button['src']}'});
+    expect(found['count'], greaterThanOrEqualTo(1));
+    expect(
+      (found['matches']! as List).first,
+      containsPair('widget', 'FilledButton'),
+    );
+
+    // Several widgets share that line; the outermost is the one tapped.
+    final tap = await ok(tester, 'tap', {'src': '${button['src']}'});
+    expect(tap['hit'], containsPair('key', 'sign_in'));
+  });
+
+  testWidgets('markImage frames a rectangle and leaves the rest alone', (
+    tester,
+  ) async {
+    // Image work needs real time, which runAsync provides.
+    final pixels = await tester.runAsync(() async {
+      final recorder = ui.PictureRecorder();
+      Canvas(recorder).drawRect(
+        const Rect.fromLTWH(0, 0, 100, 100),
+        Paint()..color = const Color(0xFF0000FF),
+      );
+      final blue = await recorder.endRecording().toImage(100, 100);
+      final marked = await markImage(
+        blue,
+        rect: const Rect.fromLTRB(30, 30, 70, 70),
+      );
+      final data = await marked.toByteData();
+      return data!.buffer.asUint8List();
+    });
+
+    List<int> rgb(int x, int y) =>
+        pixels!.sublist((y * 100 + x) * 4).take(3).toList();
+    expect(rgb(50, 25), [0xE5, 0x39, 0x35], reason: 'the frame is red');
+    expect(rgb(50, 50), [0, 0, 255], reason: 'inside the frame is untouched');
+    expect(rgb(5, 5), [0, 0, 255], reason: 'far from the frame is untouched');
   });
 
   pilotTest('explains what went wrong', (tester) async {
