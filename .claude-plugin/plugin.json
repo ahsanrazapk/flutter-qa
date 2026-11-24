@@ -1,0 +1,19 @@
+{
+  "name": "flutter-qa",
+  "description": "QA for Flutter apps using only the Flutter SDK: drive a running app like Maestro, write unit, widget and integration tests, and review architecture and state management",
+  "version": "0.1.0",
+  "author": {
+    "name": "Ahsan Raza"
+  },
+  "license": "MIT",
+  "keywords": [
+    "flutter",
+    "dart",
+    "testing",
+    "qa",
+    "e2e",
+    "integration-test",
+    "widget-test",
+    "architecture"
+  ]
+}

@@ -1,0 +1,3 @@
+tags:
+  # Pixel comparisons only hold on the platform that recorded the images.
+  golden:

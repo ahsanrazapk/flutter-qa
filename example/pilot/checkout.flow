@@ -1,0 +1,14 @@
+# Signs in, adds a product from far down the list and places the order.
+# Needs: QA_DEMO_PASSWORD (the demo backend accepts "secret").
+restart
+type "ada@example.com" --key email
+type "${QA_DEMO_PASSWORD}" --key password
+tap --key sign_in
+wait --contains "Welcome, ada@example.com"
+scroll-to --text "Product 30"
+tap --tooltip "Add Product 30"
+wait --contains "Cart: 1 items"
+tap --key checkout
+wait --text "Total $348.75"      # 387.50 less the 10% discount
+tap --text "Place order"
+wait --text "Order placed"

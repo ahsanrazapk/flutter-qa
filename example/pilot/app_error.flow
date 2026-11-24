@@ -1,0 +1,8 @@
+# This flow is meant to FAIL: it proves that an exception thrown by the app
+# stops a flow, even though every step "worked".
+restart
+type "ada@example.com" --key email
+type "secret" --key password --submit
+tap --tooltip Settings
+tap --text "Throw test error"
+tap --text "Sign out"            # never reached

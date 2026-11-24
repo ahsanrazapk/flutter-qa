@@ -1,0 +1,15 @@
+{
+  "name": "flutter-qa",
+  "description": "QA skills for Flutter apps",
+  "owner": {
+    "name": "Ahsan Raza"
+  },
+  "plugins": [
+    {
+      "name": "flutter-qa",
+      "description": "QA for Flutter apps using only the Flutter SDK: drive a running app like Maestro, write unit, widget and integration tests, and review architecture and state management",
+      "version": "0.1.0",
+      "source": "./"
+    }
+  ]
+}
