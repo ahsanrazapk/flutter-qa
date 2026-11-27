@@ -199,6 +199,143 @@ void main() {
     });
   });
 
+  group('changed code', () {
+    test('reads the new side of a diff, hunk by hunk', () {
+      const diff = '''
+diff --git a/lib/cart.dart b/lib/cart.dart
+--- a/lib/cart.dart
++++ b/lib/cart.dart
+@@ -5 +5 @@ class Cart {
+-  old
++  new
+@@ -12,2 +11,0 @@
+-  gone
+-  gone too
+@@ -70,2 +68,3 @@
+-  a
+-  b
++  a
++  b
++  c
+diff --git a/lib/old.dart b/lib/old.dart
+--- a/lib/old.dart
++++ /dev/null
+@@ -1,2 +0,0 @@
+-gone
+-gone
+diff --git a/lib/new.dart b/lib/new.dart
+--- /dev/null
++++ b/lib/new.dart
+@@ -0,0 +1,4 @@
++one
+''';
+      expect(changedLines(diff), {
+        'lib/cart.dart': [(5, 5), (11, 11), (68, 70)],
+        'lib/new.dart': [(1, 4)],
+      });
+    });
+
+    // Line numbers:  1 class, 2 submit, 5 build, 6 Scaffold, 7 AppBar,
+    // 8 Padding, 10 Column, 12 FilledButton, 16 Text('Total').
+    const source = '''
+class CartPage extends StatelessWidget {
+  void _submit() {
+    order();
+  }
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Cart')),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            FilledButton(
+              onPressed: _submit,
+              child: const Text('Place order'),
+            ),
+            const Text('Total'),
+          ],
+        ),
+      ),
+    );
+  }
+}''';
+
+    /// The snapshot of that page, and which labels a change to [lines] marks.
+    (List<String>, Map<String, String>) marked(List<(int, int)> lines) {
+      String at(int line) => 'lib/cart_page.dart:$line';
+      final snapshot = {
+        'nodes': [
+          {
+            'label': 'Cart',
+            'src': at(7),
+            'chain': [at(7), at(6)],
+          },
+          {
+            'label': 'Place order',
+            'src': at(12),
+            'chain': [at(12), at(10), at(8), at(6)],
+          },
+          {
+            'label': 'Total',
+            'src': at(16),
+            'chain': [at(16), at(10), at(8), at(6)],
+          },
+        ],
+      };
+      final elsewhere = markChanged(snapshot, {
+        'lib/cart_page.dart': lines,
+      }, (file) => source.split('\n'));
+      return (
+        [
+          for (final node in snapshot['nodes']!)
+            if (node['changed'] == true) node['label']! as String,
+        ],
+        elsewhere,
+      );
+    }
+
+    test('a changed line marks the widget whose call it lies in', () {
+      expect(marked([(16, 16)]).$1, ['Total']);
+      // The button's callback and its child are part of the button.
+      expect(marked([(13, 14)]).$1, ['Place order']);
+    });
+
+    test('a changed wrapper marks everything it wraps, and nothing else', () {
+      expect(marked([(9, 9)]).$1, ['Place order', 'Total']);
+    });
+
+    test('changed lines outside every widget on screen are handed back', () {
+      final (labels, elsewhere) = marked([(3, 3), (16, 16), (21, 22)]);
+      expect(labels, ['Total']);
+      expect(elsewhere, {'lib/cart_page.dart': '3, 21-22'});
+    });
+
+    test('a snapshot says what changed here and what did not show', () {
+      expect(
+        renderSnapshot({
+          'size': [800, 600],
+          'route': null,
+          'nodes': [
+            {'ref': 1, 'depth': 0, 'label': 'Total', 'changed': true},
+            {'ref': 2, 'depth': 0, 'label': 'Cart'},
+          ],
+          'changed': {
+            'base': 'main',
+            'files': 2,
+            'elsewhere': {'lib/cart.dart': '12-18'},
+          },
+        }),
+        'screen 800x600\n'
+        '[1] text "Total"  *changed*\n'
+        '[2] text "Cart"\n'
+        'changed since main: 1 of these elements. '
+        'Changed, but no widget on this screen:\n'
+        '  lib/cart.dart:12-18',
+      );
+    });
+  });
+
   group('session setup', () {
     test('reads the package name from a pubspec', () {
       expect(

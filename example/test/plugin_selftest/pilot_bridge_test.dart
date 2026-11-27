@@ -96,6 +96,22 @@ void main() {
     expect(button['key'], 'sign_in');
   });
 
+  pilotTest('a traced file lists the widgets around each node', (tester) async {
+    await tester.pumpWidget(const DemoApp(auth: FakeAuthRepository()));
+    const file = 'lib/presentation/login_screen.dart';
+    final snapshot = await ok(tester, 'snapshot', {'files': file});
+
+    final button = nodeLabelled(snapshot, 'Sign in', flag: 'isButton');
+    final chain = (button['chain']! as List).cast<String>();
+    // The button itself first, then the column, form and scaffold around it.
+    expect(chain.first, button['src']);
+    expect(chain.length, greaterThan(3));
+    expect(chain, everyElement(startsWith('$file:')));
+
+    final untraced = await ok(tester, 'snapshot');
+    expect(nodes(untraced).first, isNot(contains('chain')));
+  });
+
   pilotTest('types into fields and taps through to the next screen', (
     tester,
   ) async {

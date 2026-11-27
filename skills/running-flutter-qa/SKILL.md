@@ -23,7 +23,10 @@ asked, and then re-run the layer that found the problem.
 
 - The whole app, or a change? For a change: `git diff --stat <base>...HEAD`
   and list the screens, rules and journeys it touches, plus what depends on
-  them.
+  them. When driving, `pilot snapshot --changed <base>` marks the elements the
+  change built on each screen: exercise those first. Changed lines that no
+  screen ever showed were not driven; cover them with a test or list them
+  under "Not covered".
 - Which devices matter (Android, iOS, tablet, desktop)? Run `flutter devices`
   and use only those it lists as connected; ignore any marked offline or
   unauthorised. A physical phone is somebody's phone: use it only if the user

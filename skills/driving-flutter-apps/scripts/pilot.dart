@@ -16,7 +16,10 @@ Session
   reload | restart       hot reload | hot restart after a code change
 
 Look
-  snapshot [--json]      what is on screen: one line per element, with [ref]
+  snapshot [--json] [--changed BASE]
+                         what is on screen: one line per element, with [ref].
+                         --changed marks the elements built by lines of lib/
+                         that differ from a git commit or branch, e.g. main
   shot [FILE.png]        screenshot of the Flutter UI, 1 px per logical pixel
   wait TARGET [--gone]   wait until a widget is on screen (or gone)
   errors                 exceptions the app threw since the last command
@@ -62,6 +65,7 @@ const _valueOptions = [
   'timeout',
   'target',
   'device',
+  'changed',
 ];
 const _switches = ['gone', 'json', 'quiet', 'long', 'double', 'submit', 'up'];
 
@@ -233,6 +237,7 @@ String renderNode(Map<String, dynamic> node) {
     if (node['id'] case final id?) 'id=$id',
     if (notes.isNotEmpty) '(${notes.join(', ')})',
     if (origin.isNotEmpty) ' <- $origin',
+    if (node['changed'] == true) ' *changed*',
   ].join(' ');
   return '${'  ' * (node['depth'] as int? ?? 0)}$line';
 }
@@ -246,7 +251,176 @@ String renderSnapshot(Map<String, dynamic> snapshot) {
     for (final node in nodes) renderNode(node as Map<String, dynamic>),
     if (nodes.isEmpty)
       '(nothing is on screen: the app is showing a blank page)',
+    if (snapshot['changed'] case final Map changed)
+      ..._renderChanged(
+        changed,
+        nodes.where((node) => (node as Map)['changed'] == true).length,
+      ),
   ].join('\n');
+}
+
+/// The lines under a snapshot that say how much of a change it shows.
+List<String> _renderChanged(Map<dynamic, dynamic> changed, int marked) {
+  final base = changed['base'];
+  if (changed['files'] == 0) return ['changed since $base: nothing in lib/'];
+  final elsewhere = (changed['elsewhere'] as Map).entries.toList();
+  const shown = 10;
+  return [
+    'changed since $base: $marked of these elements'
+        '${elsewhere.isEmpty ? '' : '. Changed, but no widget on this screen:'}',
+    for (final entry in elsewhere.take(shown)) '  ${entry.key}:${entry.value}',
+    if (elsewhere.length > shown)
+      '  and ${elsewhere.length - shown} more files',
+  ];
+}
+
+/// The lines each file gained or had rewritten, read from the output of
+/// `git diff -U0`: `{'lib/cart.dart': [(12, 18), (40, 40)]}`.
+Map<String, List<(int, int)>> changedLines(String diff) {
+  final changed = <String, List<(int, int)>>{};
+  final hunk = RegExp(r'^@@ -\S+ \+(\d+)(?:,(\d+))? @@');
+  List<(int, int)>? ranges;
+  for (final line in const LineSplitter().convert(diff)) {
+    if (line.startsWith('+++ b/')) {
+      ranges = changed[line.substring(6)] = [];
+    } else if (line == '+++ /dev/null') {
+      ranges = null; // a deleted file has no line left to find on screen
+    } else if (hunk.firstMatch(line) case final match?) {
+      final start = int.parse(match[1]!);
+      final count = int.parse(match[2] ?? '1');
+      // A hunk that only removes lines sits just after line [start].
+      final first = start == 0 ? 1 : start;
+      ranges?.add((first, count == 0 ? first : start + count - 1));
+    }
+  }
+  return changed;
+}
+
+/// The last line of the expression that opens on [line], counted from 1.
+// shortcut: goes by indentation, so it needs `dart format` layout; match the
+// brackets instead if hand-formatted code gets the wrong elements marked.
+int _endOf(List<String> source, int line) {
+  int indent(String text) => text.length - text.trimLeft().length;
+  if (line > source.length) return line;
+  final own = indent(source[line - 1]);
+  var end = line;
+  for (var next = line + 1; next <= source.length; next++) {
+    final text = source[next - 1];
+    if (text.trim().isEmpty) continue;
+    final closes = indent(text) == own && ')]}'.contains(text.trimLeft()[0]);
+    if (indent(text) <= own && !closes) break;
+    end = next;
+    if (closes) break;
+  }
+  return end;
+}
+
+/// `[12, 13, 14, 40]` as `12-14, 40`.
+String _ranges(List<int> lines) {
+  final ranges = <String>[];
+  for (var i = 0; i < lines.length; i++) {
+    final first = lines[i];
+    while (i + 1 < lines.length && lines[i + 1] == lines[i] + 1) {
+      i++;
+    }
+    ranges.add(first == lines[i] ? '$first' : '$first-${lines[i]}');
+  }
+  return ranges.join(', ');
+}
+
+/// Sets `changed` on the nodes of [snapshot] that the [changed] lines built,
+/// and returns the changed lines that built no widget on screen, as
+/// `{'lib/cart.dart': '12-18, 40'}`. [read] gives a file's lines.
+///
+/// A changed line belongs to the innermost widget whose constructor call it
+/// lies in, among the widgets around the snapshot's nodes. Every node at or
+/// under that widget is marked: a wrapper's new padding moves its children.
+Map<String, String> markChanged(
+  Map<String, dynamic> snapshot,
+  Map<String, List<(int, int)>> changed,
+  List<String> Function(String file) read,
+) {
+  final nodes = (snapshot['nodes'] as List).cast<Map<String, dynamic>>();
+  Iterable<String> places(Map<String, dynamic> node) => [
+    ?node['src'] as String?,
+    ...(node['chain'] as List? ?? const []).cast<String>(),
+  ];
+
+  final owners = <String>{};
+  final elsewhere = <String, String>{};
+  for (final MapEntry(key: file, value: ranges) in changed.entries) {
+    final source = read(file);
+    // Where each widget of this file starts, and where its call ends.
+    final spans = <int, int>{};
+    for (final place in nodes.expand(places)) {
+      final colon = place.lastIndexOf(':');
+      if (place.substring(0, colon) != file) continue;
+      final line = int.parse(place.substring(colon + 1));
+      spans[line] ??= _endOf(source, line);
+    }
+    final loose = <int>[];
+    for (final (first, last) in ranges) {
+      for (var line = first; line <= last && line <= source.length; line++) {
+        final around = [
+          for (final span in spans.entries)
+            if (span.key <= line && line <= span.value) span.key,
+        ];
+        if (around.isEmpty) {
+          loose.add(line);
+        } else {
+          // Calls nest, so the one that starts last is the innermost.
+          owners.add('$file:${around.reduce((a, b) => a > b ? a : b)}');
+        }
+      }
+    }
+    if (loose.isNotEmpty) elsewhere[file] = _ranges(loose);
+  }
+  for (final node in nodes) {
+    if (places(node).any(owners.contains)) node['changed'] = true;
+  }
+  return elsewhere;
+}
+
+/// The lines of the app's own Dart code that differ from the commit where
+/// its history left [base], uncommitted and untracked work included.
+// shortcut: lib/ only, so a local package elsewhere in the repository is not
+// followed; widen the pathspec when someone's widgets live outside lib/.
+Map<String, List<(int, int)>> _changedSince(String project, String base) {
+  // The value goes to git as an argument; an option must not get through.
+  if (base.startsWith('-')) throw Fail('--changed takes a branch or commit.');
+  String git(List<String> arguments) {
+    final ProcessResult result;
+    try {
+      result = Process.runSync('git', arguments, workingDirectory: project);
+    } on ProcessException {
+      throw Fail('--changed needs git on the PATH.');
+    }
+    if (result.exitCode != 0) {
+      throw Fail('git ${arguments.first} failed: ${'${result.stderr}'.trim()}');
+    }
+    return '${result.stdout}';
+  }
+
+  const code = ['--', 'lib/*.dart'];
+  final from = git(['merge-base', base, 'HEAD']).trim();
+  final changed = changedLines(
+    git([
+      'diff',
+      '-U0',
+      '--relative',
+      '--no-color',
+      '--no-ext-diff',
+      '--src-prefix=a/',
+      '--dst-prefix=b/',
+      from,
+      ...code,
+    ]),
+  );
+  final added = git(['ls-files', '--others', '--exclude-standard', ...code]);
+  for (final file in const LineSplitter().convert(added)) {
+    changed[file] = [(1, 1 << 30)]; // a new file: every line
+  }
+  return changed;
 }
 
 /// The app's package name, from its pubspec.
@@ -615,7 +789,24 @@ Future<String> command(Session session, Args args, Duration timeout) async {
   final until = DateTime.now().add(timeout);
   switch (name) {
     case 'snapshot':
-      final snapshot = await session.send('snapshot', const {}, until);
+      final base = args.options['changed'];
+      final changed = base == null
+          ? null
+          : _changedSince(session.project, base);
+      final snapshot = await session.send('snapshot', {
+        if (changed != null && changed.isNotEmpty)
+          'files': changed.keys.join('\n'),
+      }, until);
+      if (changed != null) {
+        snapshot['changed'] = {
+          'base': base,
+          'files': changed.length,
+          'elsewhere': markChanged(snapshot, changed, (file) {
+            final source = File('${session.project}/$file');
+            return source.existsSync() ? source.readAsLinesSync() : const [];
+          }),
+        };
+      }
       return args.has('json') ? jsonEncode(snapshot) : renderSnapshot(snapshot);
     case 'reload' || 'restart':
       final report = await _reload(

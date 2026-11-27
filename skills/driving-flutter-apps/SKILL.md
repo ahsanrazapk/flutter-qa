@@ -27,6 +27,7 @@ not run in zsh. Run it from the Flutter project root, or pass `--project DIR`.
 | Launch a flavor or another main | `pilot start -d <device> --target lib/main_dev.dart -- --flavor dev` |
 | Still building | `pilot ready` (repeat until it prints `ready`) |
 | Read the screen | `pilot snapshot` |
+| Read the screen and mark what a change built | `pilot snapshot --changed main` (any git branch or commit) |
 | See the pixels | `pilot shot` then Read `.dart_tool/flutter_pilot/shot.png` |
 | Screenshot with one element framed in red | `pilot shot bug.png --key pay`, `pilot shot bug.png 12`, `pilot shot bug.png --src lib/cart.dart:57` |
 | Tap | `pilot tap 12`, `pilot tap --key sign_in`, `pilot tap --text "Save"` |
@@ -63,6 +64,11 @@ screen 411x890  route /cart (MaterialPageRoute<void>)
   new snapshot instead of reusing old ones.
 - After `<-` comes the widget your app's code created, its `Key`, and the
   source line. Open that line to learn what the element does before guessing.
+- With `--changed <base>`, `*changed*` ends the line of every element built by
+  code in `lib/` that differs from `<base>`, a changed wrapper's children
+  included. Under the list come the changed lines that built no widget on
+  this screen: another screen, a branch not taken, or logic. Reload first if
+  the code was edited after the app started, or the lines will not match.
 - The route line names the top route. A `DialogRoute` or `ModalBottomSheetRoute`
   there means an overlay is open and everything under it is unreachable.
 - `(off screen)` rows exist but need scrolling. `scrolled 0 of 2084` on a

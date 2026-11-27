@@ -367,7 +367,34 @@ class _Pilot {
           max.isFinite ? max.round() : -1,
         ],
       ..._origin(owner, node: node.id),
+      if (owner != null && _traced != null) 'chain': _chain(owner, _traced!),
     };
+  }
+
+  /// The files a snapshot was asked to trace, one path per line.
+  late final _traced = params['files']?.split('\n').toSet();
+
+  final _places = <Element, String?>{};
+
+  /// Where the widgets around [element] were created in [files], nearest
+  /// first, each as `lib/cart.dart:57`.
+  List<String> _chain(Element element, Set<String> files) {
+    final chain = <String>[];
+    void add(Element at) {
+      // Nodes share most of their ancestors, so each is looked up once.
+      final place = _places.putIfAbsent(at, () => _createdAt(at));
+      if (place == null) return;
+      if (files.contains(place.substring(0, place.lastIndexOf(':')))) {
+        chain.add(place);
+      }
+    }
+
+    add(element);
+    element.visitAncestorElements((ancestor) {
+      add(ancestor);
+      return true;
+    });
+    return chain;
   }
 
   /// A node's rectangle in logical screen coordinates.

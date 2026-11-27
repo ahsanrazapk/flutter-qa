@@ -70,6 +70,7 @@ Open Claude Code in your Flutter project and ask in your own words:
 QA the checkout feature and give me the report.
 Run my app on the emulator, sign in with the test account and check the cart total.
 Double tap every button on the payment screen and tell me what breaks.
+QA what this branch changed against main.
 Write unit tests for CartBloc, including the failure paths.
 Why does my login widget test time out in pumpAndSettle?
 Turn the sign-up flow into an integration test.
@@ -139,6 +140,33 @@ its source line are printed too:
 ```
 ! app error: IntegerDivisionByZeroException  at lib/presentation/home_screen.dart:94
 ```
+
+### What your branch changed
+
+`--changed` reads the git diff and marks every element on screen that the
+changed lines built, so a pull request gets tested where it was edited. From
+the example app, with four lines edited:
+
+```
+$ pilot snapshot --changed main
+screen 800x600  route / (MaterialPageRoute<dynamic>)
+[9] header "Sign in"  <- Text lib/presentation/login_screen.dart:39
+[5] textfield "Email"  <- TextFormField key=email lib/presentation/login_screen.dart:48  *changed*
+[6] textfield "Password" (obscured)  <- TextFormField key=password lib/presentation/login_screen.dart:56  *changed*
+[7] button "Sign in"  <- FilledButton key=sign_in lib/presentation/login_screen.dart:70  *changed*
+changed since main: 3 of these elements. Changed, but no widget on this screen:
+  lib/domain/cart.dart:24
+  lib/presentation/home_screen.dart:63, 135
+```
+
+One edit changed the padding around the form, so the three elements inside it
+are marked and the title is not. The lines underneath built nothing here: two
+belong to other screens and get their mark once you are there, and one is a
+pricing rule that no screen shows, which is a unit test's job. Whatever never
+shows on any screen goes under "Not covered" in the report.
+
+It reads `lib/` only, and finds where a widget ends by its indentation, so the
+code has to be formatted with `dart format`.
 
 ### Saved flows
 
